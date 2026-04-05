@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Recurrent Neural Networks Work</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0e14;
+    --surface: #13161f;
+    --surface2: #1a1e2a;
+    --border: #2a2f3e;
+    --text: #e2e4ea;
+    --text-dim: #7a8199;
+    --accent: #6c9cff;
+    --accent2: #ff7eb3;
+    --accent3: #7affc1;
+    --accent4: #ffcb6b;
+    --input-color: #5b9aff;
+    --hidden-color: #c084fc;
+    --output-color: #34d399;
+    --weight-color: #fbbf24;
+    --radius: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .app {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  header {
+    text-align: center;
+    padding: 32px 0 24px;
+  }
+
+  header h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+
+  header p {
+    color: var(--text-dim);
+    font-size: 0.95rem;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .step-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin: 20px 0;
+  }
+
+  .step-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--border);
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+
+  .step-dot.active {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    transform: scale(1.3);
+  }
+
+  .step-dot.visited {
+    background: var(--accent);
+    opacity: 0.4;
+  }
+
+  .main-content {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+  }
+
+  .card-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title .step-num {
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  .card-subtitle {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+  }
+
+  /* Canvas area */
+  .viz-area {
+    background: var(--bg);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    min-height: 340px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Math display */
+  .math-panel {
+    margin-top: 16px;
+  }
+
+  .math-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    line-height: 1.8;
+    overflow-x: auto;
+  }
+
+  .math-block .label {
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  .math-block .formula {
+    color: var(--text);
+  }
+
+  .math-block .val-input { color: var(--input-color); }
+  .math-block .val-hidden { color: var(--hidden-color); }
+  .math-block .val-output { color: var(--output-color); }
+  .math-block .val-weight { color: var(--weight-color); }
+  .math-block .val-result { color: var(--accent3); font-weight: 600; }
+  .math-block .highlight { 
+    background: rgba(108,156,255,0.12); 
+    padding: 2px 6px; 
+    border-radius: 4px; 
+  }
+
+  .explanation {
+    margin-top: 12px;
+    padding: 14px 16px;
+    background: rgba(108,156,255,0.06);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .explanation strong {
+    color: var(--accent);
+  }
+
+  /* Navigation */
+  .nav-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+    gap: 12px;
+  }
+
+  .nav-btn {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 10px 28px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .btn-prev {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .btn-prev:hover:not(:disabled) {
+    background: var(--border);
+  }
+
+  .btn-next {
+    background: linear-gradient(135deg, var(--accent), #5080ee);
+    color: #fff;
+  }
+
+  .btn-next:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(108,156,255,0.3);
+  }
+
+  .step-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border-radius: 8px;
+    font-size: 0.78rem;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .app { padding: 12px; }
+    header h1 { font-size: 1.4rem; }
+    .card { padding: 16px; }
+    .math-block { font-size: 0.72rem; padding: 12px; }
+    .nav-btn { padding: 8px 16px; font-size: 0.82rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <h1>How Recurrent Neural Networks Work</h1>
+    <p>An interactive step-by-step walkthrough of forward propagation through a small RNN — with every computation shown</p>
+  </header>
+
+  <div class="step-indicator" id="stepIndicator"></div>
+
+  <div class="main-content">
+    <div class="card">
+      <div class="card-title">
+        <span class="step-num" id="stepNum">1 / 14</span>
+        <span id="stepTitle">The Architecture</span>
+      </div>
+      <div class="card-subtitle" id="stepSubtitle">Understanding the building blocks of an RNN</div>
+
+      <div class="viz-area">
+        <canvas id="canvas"></canvas>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--input-color)"></div> Input</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--hidden-color)"></div> Hidden State</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--output-color)"></div> Output</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--weight-color)"></div> Weights</div>
+      </div>
+
+      <div class="math-panel" id="mathPanel"></div>
+      <div class="explanation" id="explanation"></div>
+    </div>
+  </div>
+
+  <div class="nav-bar">
+    <button class="nav-btn btn-prev" id="btnPrev" onclick="prevStep()">← Previous</button>
+    <span class="step-label" id="navLabel">Step 1 of 14</span>
+    <button class="nav-btn btn-next" id="btnNext" onclick="nextStep()">Next →</button>
+  </div>
+</div>
+
+<script>
+// ===== RNN PARAMETERS (small illustrative network) =====
+// Input size: 2, Hidden size: 2, Output size: 2
+// Sequence length: 3 time steps
+
+// Weights (fixed for illustration)
+const Wxh = [[0.5, -0.3], [0.2, 0.7]];   // input→hidden (2x2)
+const Whh = [[0.1, -0.5], [0.4, 0.2]];    // hidden→hidden (2x2)
+const Why = [[0.6, -0.2], [0.3, 0.8]];    // hidden→output (2x2)
+const bh  = [0.0, 0.0];                    // hidden bias
+const by  = [0.0, 0.0];                    // output bias
+
+// Input sequence (3 time steps)
+const X = [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
+
+// Initial hidden state
+const h_init = [0.0, 0.0];
+
+// ===== COMPUTE ALL FORWARD PASS VALUES =====
+function tanh(x) { return Math.tanh(x); }
+function softmax(arr) {
+  const max = Math.max(...arr);
+  const exps = arr.map(v => Math.exp(v - max));
+  const sum = exps.reduce((a, b) => a + b, 0);
+  return exps.map(v => v / sum);
+}
+function matVecMul(M, v) {
+  return M.map(row => row.reduce((s, w, j) => s + w * v[j], 0));
+}
+function vecAdd(a, b) { return a.map((v, i) => v + b[i]); }
+function fmt(v, d=4) { return typeof v === 'number' ? v.toFixed(d) : v; }
+function fmtVec(v, d=4) { return '[' + v.map(x => fmt(x, d)).join(', ') + ']'; }
+function fmtMat(M, d=1) { return '[' + M.map(r => fmtVec(r, d)).join(', ') + ']'; }
+
+// Forward pass storage
+const h = [h_init]; // h[0]=init, h[1]=after t=0, etc.
+const z_h = [];     // pre-activation hidden
+const z_y = [];     // pre-softmax output
+const y_hat = [];   // softmax output
+const Wxh_x = [];
+const Whh_h = [];
+
+for (let t = 0; t < 3; t++) {
+  const wx = matVecMul(Wxh, X[t]);
+  const wh = matVecMul(Whh, h[t]);
+  Wxh_x.push(wx);
+  Whh_h.push(wh);
+  const z = vecAdd(vecAdd(wx, wh), bh);
+  z_h.push(z);
+  const ht = z.map(tanh);
+  h.push(ht);
+  const zy = vecAdd(matVecMul(Why, ht), by);
+  z_y.push(zy);
+  y_hat.push(softmax(zy));
+}
+
+// ===== STEP DEFINITIONS =====
+const steps = [
+  {
+    title: "The RNN Architecture",
+    subtitle: "Understanding the building blocks",
+    draw: "architecture",
+    math: `<span class="label">RNN Core Equations</span>
+<span class="formula">
+<span class="val-hidden">hₜ</span> = tanh(<span class="val-weight">W_xh</span> · <span class="val-input">xₜ</span> + <span class="val-weight">W_hh</span> · <span class="val-hidden">hₜ₋₁</span> + <span class="val-weight">b_h</span>)
+
+<span class="val-output">ŷₜ</span> = softmax(<span class="val-weight">W_hy</span> · <span class="val-hidden">hₜ</span> + <span class="val-weight">b_y</span>)
+</span>`,
+    explanation: `An <strong>RNN</strong> processes sequences one element at a time. At each time step, it takes an <strong>input xₜ</strong> and the <strong>previous hidden state hₜ₋₁</strong>, combines them with learned weights, and produces a <strong>new hidden state hₜ</strong> and an <strong>output ŷₜ</strong>. The hidden state is the network's "memory" — it carries information from previous time steps.`
+  },
+  {
+    title: "Network Parameters",
+    subtitle: "The weights and biases of our small RNN",
+    draw: "params",
+    math: `<span class="label">Weight Matrices & Biases</span>
+<span class="formula">
+<span class="val-weight">W_xh</span> (input→hidden) = ${fmtMat(Wxh)}
+<span class="val-weight">W_hh</span> (hidden→hidden) = ${fmtMat(Whh)}
+<span class="val-weight">W_hy</span> (hidden→output) = ${fmtMat(Why)}
+<span class="val-weight">b_h</span> = ${fmtVec(bh, 1)}    <span class="val-weight">b_y</span> = ${fmtVec(by, 1)}
+</span>`,
+    explanation: `Our tiny RNN has <strong>2 input neurons</strong>, <strong>2 hidden neurons</strong>, and <strong>2 output neurons</strong>. The weight matrices connect layers: <strong>W_xh</strong> maps inputs to hidden, <strong>W_hh</strong> maps previous hidden to current hidden (this is the recurrent connection!), and <strong>W_hy</strong> maps hidden to output. In a real network, these are learned via backpropagation through time (BPTT).`
+  },
+  {
+    title: "Input Sequence & Initial State",
+    subtitle: "What we feed into the network",
+    draw: "inputs",
+    math: `<span class="label">Input Sequence (3 time steps)</span>
+<span class="formula">
+<span class="val-input">x₀</span> = ${fmtVec(X[0],1)}    (e.g. "word 1" one-hot)
+<span class="val-input">x₁</span> = ${fmtVec(X[1],1)}    (e.g. "word 2" one-hot)
+<span class="val-input">x₂</span> = ${fmtVec(X[2],1)}    (e.g. "word 3" encoding)
+
+<span class="val-hidden">h₋₁</span> = ${fmtVec(h_init,1)}    (initial hidden state = zeros)
+</span>`,
+    explanation: `We'll process a sequence of <strong>3 vectors</strong>. Think of these as word embeddings or sensor readings at 3 time steps. The initial hidden state <strong>h₋₁</strong> is set to zeros — the network starts with no prior memory. The RNN will now unroll across these 3 time steps.`
+  },
+
+  // ===== TIME STEP 0 =====
+  {
+    title: "Time Step 0 — Input × Weights",
+    subtitle: "Computing W_xh · x₀ and W_hh · h₋₁",
+    draw: "t0_input",
+    math: `<span class="label">Step 1: Multiply inputs by weights</span>
+<span class="formula">
+<span class="val-weight">W_xh</span> · <span class="val-input">x₀</span> = ${fmtMat(Wxh)} · ${fmtVec(X[0],1)}
+  = [0.5×1.0 + (-0.3)×0.0,  0.2×1.0 + 0.7×0.0]
+  = <span class="val-result">${fmtVec(Wxh_x[0])}</span>
+
+<span class="val-weight">W_hh</span> · <span class="val-hidden">h₋₁</span> = ${fmtMat(Whh)} · ${fmtVec(h[0],1)}
+  = <span class="val-result">${fmtVec(Whh_h[0])}</span>
+</span>`,
+    explanation: `At <strong>t=0</strong>, we multiply the input x₀ by W_xh and the previous hidden state h₋₁ by W_hh. Since h₋₁ is all zeros, the recurrent term contributes nothing yet. The input [1,0] selects the first column of W_xh.`
+  },
+  {
+    title: "Time Step 0 — Hidden State",
+    subtitle: "Applying tanh activation to get h₀",
+    draw: "t0_hidden",
+    math: `<span class="label">Step 2: Sum and apply tanh activation</span>
+<span class="formula">
+<span class="val-hidden">z₀</span> = <span class="val-weight">W_xh</span>·<span class="val-input">x₀</span> + <span class="val-weight">W_hh</span>·<span class="val-hidden">h₋₁</span> + <span class="val-weight">b_h</span>
+    = ${fmtVec(Wxh_x[0])} + ${fmtVec(Whh_h[0])} + ${fmtVec(bh,1)}
+    = ${fmtVec(z_h[0])}
+
+<span class="val-hidden">h₀</span> = tanh(<span class="val-hidden">z₀</span>)
+    = [tanh(${fmt(z_h[0][0])}), tanh(${fmt(z_h[0][1])})]
+    = <span class="val-result">${fmtVec(h[1])}</span>
+</span>`,
+    explanation: `We add both products and the bias, then squash through <strong>tanh</strong> (outputs between -1 and +1). This is the new hidden state <strong>h₀</strong> — it encodes what the network "remembers" after seeing the first input. The tanh prevents values from exploding.`
+  },
+  {
+    title: "Time Step 0 — Output",
+    subtitle: "Computing ŷ₀ from h₀",
+    draw: "t0_output",
+    math: `<span class="label">Step 3: Compute output via softmax</span>
+<span class="formula">
+<span class="val-output">z_y₀</span> = <span class="val-weight">W_hy</span> · <span class="val-hidden">h₀</span> + <span class="val-weight">b_y</span>
+     = ${fmtMat(Why)} · ${fmtVec(h[1])}
+     = [0.6×${fmt(h[1][0])} + (-0.2)×${fmt(h[1][1])},  0.3×${fmt(h[1][0])} + 0.8×${fmt(h[1][1])}]
+     = ${fmtVec(z_y[0])}
+
+<span class="val-output">ŷ₀</span> = softmax(${fmtVec(z_y[0])})
+    = <span class="val-result">${fmtVec(y_hat[0])}</span>
+</span>`,
+    explanation: `The hidden state is projected through <strong>W_hy</strong> to produce logits, then <strong>softmax</strong> converts them to probabilities that sum to 1. The output ŷ₀ = ${fmtVec(y_hat[0])} is the network's prediction at time step 0. This could represent next-word probabilities.`
+  },
+
+  // ===== TIME STEP 1 =====
+  {
+    title: "Time Step 1 — Input × Weights",
+    subtitle: "Now h₀ feeds back in as recurrent input!",
+    draw: "t1_input",
+    math: `<span class="label">Step 1: Multiply inputs — now with memory!</span>
+<span class="formula">
+<span class="val-weight">W_xh</span> · <span class="val-input">x₁</span> = ${fmtMat(Wxh)} · ${fmtVec(X[1],1)}
+  = [0.5×0.0 + (-0.3)×1.0,  0.2×0.0 + 0.7×1.0]
+  = <span class="val-result">${fmtVec(Wxh_x[1])}</span>
+
+<span class="val-weight">W_hh</span> · <span class="val-hidden">h₀</span> = ${fmtMat(Whh)} · ${fmtVec(h[1])}
+  = [0.1×${fmt(h[1][0])} + (-0.5)×${fmt(h[1][1])},  0.4×${fmt(h[1][0])} + 0.2×${fmt(h[1][1])}]
+  = <span class="val-result">${fmtVec(Whh_h[1])}</span>
+</span>`,
+    explanation: `This is where the <strong>"recurrent" magic</strong> happens! Unlike t=0, the hidden state h₀ is no longer zero — it carries information from the first input. The term <strong>W_hh · h₀</strong> now contributes real values, allowing the network to combine past context with the new input.`
+  },
+  {
+    title: "Time Step 1 — Hidden State",
+    subtitle: "h₁ now encodes info from BOTH x₀ and x₁",
+    draw: "t1_hidden",
+    math: `<span class="label">Step 2: Combine and activate</span>
+<span class="formula">
+<span class="val-hidden">z₁</span> = ${fmtVec(Wxh_x[1])} + ${fmtVec(Whh_h[1])} + ${fmtVec(bh,1)}
+    = ${fmtVec(z_h[1])}
+
+<span class="val-hidden">h₁</span> = tanh(${fmtVec(z_h[1])})
+    = [tanh(${fmt(z_h[1][0])}), tanh(${fmt(z_h[1][1])})]
+    = <span class="val-result">${fmtVec(h[2])}</span>
+</span>`,
+    explanation: `The new hidden state <strong>h₁</strong> now encodes information from <strong>both</strong> x₀ and x₁. Notice the values are different from h₀ — the recurrent connection has mixed in the prior context. This is how RNNs maintain a running summary of the sequence so far.`
+  },
+  {
+    title: "Time Step 1 — Output",
+    subtitle: "Prediction at t=1",
+    draw: "t1_output",
+    math: `<span class="label">Step 3: Output prediction</span>
+<span class="formula">
+<span class="val-output">z_y₁</span> = <span class="val-weight">W_hy</span> · <span class="val-hidden">h₁</span> + <span class="val-weight">b_y</span>
+     = ${fmtMat(Why)} · ${fmtVec(h[2])}
+     = ${fmtVec(z_y[1])}
+
+<span class="val-output">ŷ₁</span> = softmax(${fmtVec(z_y[1])})
+    = <span class="val-result">${fmtVec(y_hat[1])}</span>
+</span>`,
+    explanation: `The output at t=1 is computed the same way as t=0, but from the updated hidden state h₁. Compare ŷ₁ = ${fmtVec(y_hat[1])} to ŷ₀ = ${fmtVec(y_hat[0])} — the predictions differ because the hidden state has evolved with the sequence.`
+  },
+
+  // ===== TIME STEP 2 =====
+  {
+    title: "Time Step 2 — Input × Weights",
+    subtitle: "Final time step with accumulated context",
+    draw: "t2_input",
+    math: `<span class="label">Step 1: Final input with full sequence context</span>
+<span class="formula">
+<span class="val-weight">W_xh</span> · <span class="val-input">x₂</span> = ${fmtMat(Wxh)} · ${fmtVec(X[2],1)}
+  = [0.5×1.0 + (-0.3)×1.0,  0.2×1.0 + 0.7×1.0]
+  = <span class="val-result">${fmtVec(Wxh_x[2])}</span>
+
+<span class="val-weight">W_hh</span> · <span class="val-hidden">h₁</span> = ${fmtMat(Whh)} · ${fmtVec(h[2])}
+  = <span class="val-result">${fmtVec(Whh_h[2])}</span>
+</span>`,
+    explanation: `At the final time step, <strong>h₁ carries compressed information from x₀ and x₁</strong>. The recurrent connection W_hh · h₁ brings this accumulated context into the computation for h₂. This is the RNN processing the full sequence [x₀, x₁, x₂].`
+  },
+  {
+    title: "Time Step 2 — Hidden State",
+    subtitle: "h₂ encodes the entire sequence",
+    draw: "t2_hidden",
+    math: `<span class="label">Step 2: Final hidden state</span>
+<span class="formula">
+<span class="val-hidden">z₂</span> = ${fmtVec(Wxh_x[2])} + ${fmtVec(Whh_h[2])} + ${fmtVec(bh,1)}
+    = ${fmtVec(z_h[2])}
+
+<span class="val-hidden">h₂</span> = tanh(${fmtVec(z_h[2])})
+    = <span class="val-result">${fmtVec(h[3])}</span>
+</span>`,
+    explanation: `<strong>h₂</strong> is the final hidden state — it's a compressed representation of the <strong>entire input sequence</strong>. In many tasks (like sentiment analysis or machine translation), this final hidden state is used as the "sequence embedding." Notice how all three inputs have contributed to this single vector.`
+  },
+  {
+    title: "Time Step 2 — Output",
+    subtitle: "Final prediction",
+    draw: "t2_output",
+    math: `<span class="label">Step 3: Final output</span>
+<span class="formula">
+<span class="val-output">z_y₂</span> = <span class="val-weight">W_hy</span> · <span class="val-hidden">h₂</span> + <span class="val-weight">b_y</span>
+     = ${fmtVec(z_y[2])}
+
+<span class="val-output">ŷ₂</span> = softmax(${fmtVec(z_y[2])})
+    = <span class="val-result">${fmtVec(y_hat[2])}</span>
+</span>`,
+    explanation: `The final output ŷ₂ = ${fmtVec(y_hat[2])} is the network's prediction informed by the <strong>entire sequence</strong>. The softmax probabilities reflect accumulated context. In language modeling, this would predict the next word after seeing all three inputs.`
+  },
+
+  // ===== SUMMARY =====
+  {
+    title: "Complete Unrolled View",
+    subtitle: "The full forward pass across all time steps",
+    draw: "unrolled",
+    math: `<span class="label">All Hidden States & Outputs</span>
+<span class="formula">
+<span class="val-hidden">h₋₁</span> = ${fmtVec(h[0])}  →  <span class="val-hidden">h₀</span> = ${fmtVec(h[1])}  →  <span class="val-hidden">h₁</span> = ${fmtVec(h[2])}  →  <span class="val-hidden">h₂</span> = ${fmtVec(h[3])}
+
+<span class="val-output">ŷ₀</span> = ${fmtVec(y_hat[0])}
+<span class="val-output">ŷ₁</span> = ${fmtVec(y_hat[1])}
+<span class="val-output">ŷ₂</span> = ${fmtVec(y_hat[2])}
+</span>`,
+    explanation: `Here's the complete picture: the RNN <strong>unrolled across time</strong>. The same weights (W_xh, W_hh, W_hy) are shared at every step — this is <strong>weight sharing</strong>, a key RNN property. The hidden state flows left→right, carrying information forward. Each output depends on all previous inputs through the hidden state chain.`
+  },
+  {
+    title: "Key Takeaways",
+    subtitle: "What makes RNNs special — and their limitations",
+    draw: "summary",
+    math: `<span class="label">RNN Summary</span>
+<span class="formula">
+✓ Processes <span class="val-input">variable-length sequences</span>
+✓ <span class="val-weight">Shared weights</span> across time steps
+✓ <span class="val-hidden">Hidden state</span> = memory of past inputs
+✓ <span class="val-output">Output</span> at each step (or just final)
+
+Architecture: Input(2) → Hidden(2) → Output(2) × 3 steps
+Total parameters: 2×2 + 2×2 + 2×2 + 2 + 2 = <span class="val-result">16 parameters</span>
+</span>`,
+    explanation: `RNNs are powerful for sequential data — text, audio, time series. However, vanilla RNNs struggle with <strong>long-range dependencies</strong> due to vanishing/exploding gradients. This led to <strong>LSTM</strong> and <strong>GRU</strong> variants with gating mechanisms, and eventually <strong>Transformers</strong> which use attention instead of recurrence. But understanding RNNs is foundational to all of modern sequence modeling!`
+  }
+];
+
+// ===== CANVAS DRAWING =====
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let currentStep = 0;
+let animProgress = 1;
+
+function resize() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = 340 * dpr;
+  canvas.style.height = '340px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+window.addEventListener('resize', () => { resize(); draw(); });
+
+const COLORS = {
+  input: '#5b9aff',
+  hidden: '#c084fc',
+  output: '#34d399',
+  weight: '#fbbf24',
+  bg: '#0c0e14',
+  line: '#2a2f3e',
+  text: '#e2e4ea',
+  dim: '#7a8199',
+  active: '#ff7eb3',
+};
+
+function drawNode(x, y, r, color, label, value, active=false, pulse=false) {
+  ctx.save();
+  if (pulse) {
+    ctx.beginPath();
+    ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+    ctx.fillStyle = color + '25';
+    ctx.fill();
+  }
+  // Glow
+  if (active) {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 16;
+  }
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = color + '20';
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = active ? 2.5 : 1.5;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  if (label) {
+    ctx.fillStyle = color;
+    ctx.font = 'bold 11px "JetBrains Mono"';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, x, y - r - 8);
+  }
+  if (value !== undefined && value !== null) {
+    ctx.fillStyle = COLORS.text;
+    ctx.font = '10px "JetBrains Mono"';
+    ctx.textAlign = 'center';
+    ctx.fillText(value, x, y + 4);
+  }
+  ctx.restore();
+}
+
+function drawArrow(x1, y1, x2, y2, color, label, active=false, dashed=false) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.sqrt(dx*dx + dy*dy);
+  const nx = dx/len, ny = dy/len;
+  // Shorten by node radius
+  const r = 18;
+  const sx = x1 + nx*r, sy = y1 + ny*r;
+  const ex = x2 - nx*r, ey = y2 - ny*r;
+
+  ctx.save();
+  if (active) {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+  }
+  ctx.beginPath();
+  if (dashed) ctx.setLineDash([4, 4]);
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(ex, ey);
+  ctx.strokeStyle = active ? color : color + '60';
+  ctx.lineWidth = active ? 2 : 1;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.shadowBlur = 0;
+
+  // Arrowhead
+  const ah = 8;
+  const angle = Math.atan2(ey - sy, ex - sx);
+  ctx.beginPath();
+  ctx.moveTo(ex, ey);
+  ctx.lineTo(ex - ah*Math.cos(angle - 0.4), ey - ah*Math.sin(angle - 0.4));
+  ctx.lineTo(ex - ah*Math.cos(angle + 0.4), ey - ah*Math.sin(angle + 0.4));
+  ctx.closePath();
+  ctx.fillStyle = active ? color : color + '60';
+  ctx.fill();
+
+  if (label) {
+    const mx = (sx + ex) / 2, my = (sy + ey) / 2;
+    ctx.fillStyle = color + (active ? 'cc' : '80');
+    ctx.font = '9px "JetBrains Mono"';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, mx, my - 6);
+  }
+  ctx.restore();
+}
+
+function drawCurvedArrow(x1, y1, x2, y2, color, label, active=false, curveUp=true) {
+  const mx = (x1 + x2) / 2;
+  const my = curveUp ? Math.min(y1, y2) - 40 : Math.max(y1, y2) + 40;
+  ctx.save();
+  if (active) { ctx.shadowColor = color; ctx.shadowBlur = 8; }
+  ctx.beginPath();
+  ctx.moveTo(x1, y1 - 18);
+  ctx.quadraticCurveTo(mx, my, x2, y2 - 18);
+  ctx.strokeStyle = active ? color : color + '60';
+  ctx.lineWidth = active ? 2 : 1;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Arrowhead at end
+  const t = 0.98;
+  const t2 = 0.95;
+  const px = (1-t)*(1-t)*x1 + 2*(1-t)*t*mx + t*t*x2;
+  const py = (1-t)*(1-t)*(y1-18) + 2*(1-t)*t*my + t*t*(y2-18);
+  const px2 = (1-t2)*(1-t2)*x1 + 2*(1-t2)*t2*mx + t2*t2*x2;
+  const py2 = (1-t2)*(1-t2)*(y1-18) + 2*(1-t2)*t2*my + t2*t2*(y2-18);
+  const angle = Math.atan2(py - py2, px - px2);
+  ctx.beginPath();
+  ctx.moveTo(px, py);
+  ctx.lineTo(px - 8*Math.cos(angle - 0.4), py - 8*Math.sin(angle - 0.4));
+  ctx.lineTo(px - 8*Math.cos(angle + 0.4), py - 8*Math.sin(angle + 0.4));
+  ctx.closePath();
+  ctx.fillStyle = active ? color : color + '60';
+  ctx.fill();
+
+  if (label) {
+    ctx.fillStyle = active ? color : color + '80';
+    ctx.font = '9px "JetBrains Mono"';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, mx, my - 4);
+  }
+  ctx.restore();
+}
+
+function drawUnrolledRNN(activeT = -1, highlightPhase = '') {
+  const W = canvas.width / (window.devicePixelRatio || 1);
+  const H = 340;
+  const cx = W / 2;
+
+  // Three columns for t=0,1,2
+  const colW = Math.min(160, (W - 80) / 3);
+  const startX = cx - colW;
+
+  const yIn = 270;
+  const yH = 160;
+  const yOut = 60;
+  const nr = 16;
+
+  for (let t = 0; t < 3; t++) {
+    const x = startX + t * colW;
+    const isActive = (t === activeT);
+    const tLabel = `t=${t}`;
+
+    // Time label
+    ctx.fillStyle = isActive ? COLORS.text : COLORS.dim;
+    ctx.font = (isActive ? 'bold ' : '') + '12px "Space Grotesk"';
+    ctx.textAlign = 'center';
+    ctx.fillText(tLabel, x, H - 10);
+
+    // Input nodes (2)
+    const inPhase = isActive && (highlightPhase === 'input' || highlightPhase === 'all');
+    for (let i = 0; i < 2; i++) {
+      const nx = x - 14 + i * 28;
+      drawNode(nx, yIn, nr, COLORS.input, i===0 ? `x${t}[0]` : `x${t}[1]`, fmt(X[t][i], 1), inPhase, inPhase);
+    }
+
+    // Hidden nodes (2)
+    const hPhase = isActive && (highlightPhase === 'hidden' || highlightPhase === 'all');
+    const hIdx = t + 1;
+    for (let i = 0; i < 2; i++) {
+      const nx = x - 14 + i * 28;
+      drawNode(nx, yH, nr, COLORS.hidden, `h${t}[${i}]`, fmt(h[hIdx][i]), hPhase, hPhase);
+    }
+
+    // Output nodes (2)
+    const oPhase = isActive && (highlightPhase === 'output' || highlightPhase === 'all');
+    for (let i = 0; i < 2; i++) {
+      const nx = x - 14 + i * 28;
+      drawNode(nx, yOut, nr, COLORS.output, `ŷ${t}[${i}]`, fmt(y_hat[t][i]), oPhase, oPhase);
+    }
+
+    // Arrows: input → hidden
+    for (let i = 0; i < 2; i++) {
+      for (let j = 0; j < 2; j++) {
+        drawArrow(x - 14 + i*28, yIn, x - 14 + j*28, yH, COLORS.weight, '', inPhase);
+      }
+    }
+    // Arrows: hidden → output
+    for (let i = 0; i < 2; i++) {
+      for (let j = 0; j < 2; j++) {
+        drawArrow(x - 14 + i*28, yH, x - 14 + j*28, yOut, COLORS.weight, '', oPhase);
+      }
+    }
+
+    // Recurrent arrow from previous hidden
+    if (t > 0) {
+      const prevX = startX + (t-1) * colW;
+      const recPhase = isActive && (highlightPhase === 'input' || highlightPhase === 'hidden' || highlightPhase === 'all');
+      drawCurvedArrow(prevX + 14, yH, x - 14, yH, COLORS.hidden, 'W_hh', recPhase, true);
+    }
+  }
+
+  // Label weight matrices
+  ctx.fillStyle = COLORS.weight + '80';
+  ctx.font = '9px "JetBrains Mono"';
+  ctx.textAlign = 'center';
+  ctx.fillText('W_xh', startX - 35, (yIn + yH) / 2);
+  ctx.fillText('W_hy', startX - 35, (yH + yOut) / 2);
+}
+
+function drawArchitecture() {
+  const W = canvas.width / (window.devicePixelRatio || 1);
+  const H = 340;
+  const cx = W / 2;
+
+  // Single-cell view
+  const yIn = 260;
+  const yH = 155;
+  const yOut = 55;
+  const nr = 22;
+
+  // Input nodes
+  for (let i = 0; i < 2; i++) {
+    drawNode(cx - 20 + i*40, yIn, nr, COLORS.input, `x[${i}]`, null, true);
+  }
+
+  // Hidden nodes
+  for (let i = 0; i < 2; i++) {
+    drawNode(cx - 20 + i*40, yH, nr, COLORS.hidden, `h[${i}]`, null, true);
+  }
+
+  // Output nodes
+  for (let i = 0; i < 2; i++) {
+    drawNode(cx - 20 + i*40, yOut, nr, COLORS.output, `ŷ[${i}]`, null, true);
+  }
+
+  // Arrows
+  for (let i = 0; i < 2; i++) {
+    for (let j = 0; j < 2; j++) {
+      drawArrow(cx - 20 + i*40, yIn, cx - 20 + j*40, yH, COLORS.weight, '', true);
+      drawArrow(cx - 20 + i*40, yH, cx - 20 + j*40, yOut, COLORS.weight, '', true);
+    }
+  }
+
+  // Recurrent loop
+  ctx.save();
+  ctx.beginPath();
+  const rx = cx + 60;
+  ctx.arc(rx, yH, 30, -Math.PI/2, Math.PI/2);
+  ctx.strokeStyle = COLORS.hidden;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Arrowhead
+  ctx.beginPath();
+  ctx.moveTo(rx, yH - 30);
+  ctx.lineTo(rx - 6, yH - 22);
+  ctx.lineTo(rx + 6, yH - 22);
+  ctx.closePath();
+  ctx.fillStyle = COLORS.hidden;
+  ctx.fill();
+  ctx.fillStyle = COLORS.hidden;
+  ctx.font = '10px "JetBrains Mono"';
+  ctx.textAlign = 'left';
+  ctx.fillText('W_hh', rx + 34, yH + 4);
+  ctx.restore();
+
+  // Labels
+  ctx.fillStyle = COLORS.weight;
+  ctx.font = '10px "JetBrains Mono"';
+  ctx.textAlign = 'right';
+  ctx.fillText('W_xh', cx - 50, (yIn + yH) / 2);
+  ctx.fillText('W_hy', cx - 50, (yH + yOut) / 2);
+
+  // Title labels
+  ctx.font = '12px "Space Grotesk"';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = COLORS.input;
+  ctx.fillText('Input Layer', cx, yIn + 45);
+  ctx.fillStyle = COLORS.hidden;
+  ctx.fillText('Hidden Layer', cx, yH + 50);
+  ctx.fillStyle = COLORS.output;
+  ctx.fillText('Output Layer', cx, yOut - 20);
+}
+
+function drawSummary() {
+  const W = canvas.width / (window.devicePixelRatio || 1);
+  const H = 340;
+  const cx = W / 2;
+
+  const items = [
+    { icon: '🔄', text: 'Recurrence: hidden state feeds back', color: COLORS.hidden },
+    { icon: '🧠', text: 'Memory via hidden state chain', color: COLORS.hidden },
+    { icon: '⚖️', text: 'Weight sharing across time steps', color: COLORS.weight },
+    { icon: '📊', text: 'Softmax outputs at each step', color: COLORS.output },
+    { icon: '⚠️', text: 'Vanishing gradients → LSTM/GRU/Transformers', color: COLORS.active },
+  ];
+
+  items.forEach((item, i) => {
+    const y = 50 + i * 56;
+    const x = cx - 160;
+
+    ctx.fillStyle = item.color + '15';
+    ctx.beginPath();
+    ctx.roundRect(x - 20, y - 18, 360, 42, 8);
+    ctx.fill();
+    ctx.strokeStyle = item.color + '40';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.font = '20px sans-serif';
+    ctx.fillText(item.icon, x, y + 10);
+
+    ctx.fillStyle = COLORS.text;
+    ctx.font = '13px "DM Sans"';
+    ctx.textAlign = 'left';
+    ctx.fillText(item.text, x + 30, y + 8);
+    ctx.textAlign = 'center';
+  });
+}
+
+function draw() {
+  const W = canvas.width / (window.devicePixelRatio || 1);
+  const H = 340;
+  ctx.clearRect(0, 0, W, H);
+
+  const step = steps[currentStep];
+
+  switch (step.draw) {
+    case 'architecture': drawArchitecture(); break;
+    case 'params': drawArchitecture(); break;
+    case 'inputs': drawUnrolledRNN(-1, ''); break;
+    case 't0_input': drawUnrolledRNN(0, 'input'); break;
+    case 't0_hidden': drawUnrolledRNN(0, 'hidden'); break;
+    case 't0_output': drawUnrolledRNN(0, 'output'); break;
+    case 't1_input': drawUnrolledRNN(1, 'input'); break;
+    case 't1_hidden': drawUnrolledRNN(1, 'hidden'); break;
+    case 't1_output': drawUnrolledRNN(1, 'output'); break;
+    case 't2_input': drawUnrolledRNN(2, 'input'); break;
+    case 't2_hidden': drawUnrolledRNN(2, 'hidden'); break;
+    case 't2_output': drawUnrolledRNN(2, 'output'); break;
+    case 'unrolled': drawUnrolledRNN(-1, 'all'); break;
+    case 'summary': drawSummary(); break;
+  }
+}
+
+// ===== STEP NAVIGATION =====
+function buildIndicator() {
+  const el = document.getElementById('stepIndicator');
+  el.innerHTML = '';
+  steps.forEach((_, i) => {
+    const dot = document.createElement('div');
+    dot.className = 'step-dot' + (i === currentStep ? ' active' : (i < currentStep ? ' visited' : ''));
+    dot.onclick = () => goToStep(i);
+    el.appendChild(dot);
+  });
+}
+
+function updateUI() {
+  const step = steps[currentStep];
+  document.getElementById('stepNum').textContent = `${currentStep + 1} / ${steps.length}`;
+  document.getElementById('stepTitle').textContent = step.title;
+  document.getElementById('stepSubtitle').textContent = step.subtitle;
+  document.getElementById('mathPanel').innerHTML = `<div class="math-block">${step.math}</div>`;
+  document.getElementById('explanation').innerHTML = step.explanation;
+  document.getElementById('navLabel').textContent = `Step ${currentStep + 1} of ${steps.length}`;
+  document.getElementById('btnPrev').disabled = currentStep === 0;
+  document.getElementById('btnNext').disabled = currentStep === steps.length - 1;
+  document.getElementById('btnNext').textContent = currentStep === steps.length - 1 ? 'Done ✓' : 'Next →';
+  buildIndicator();
+  draw();
+}
+
+function goToStep(i) {
+  currentStep = Math.max(0, Math.min(steps.length - 1, i));
+  updateUI();
+}
+
+function nextStep() { goToStep(currentStep + 1); }
+function prevStep() { goToStep(currentStep - 1); }
+
+// Keyboard navigation
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextStep(); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); prevStep(); }
+});
+
+// Init
+updateUI();
+</script>
+</body>
+</html>
