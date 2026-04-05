@@ -37,7 +37,7 @@ By the end of this course, students will be able to:
 | 6 | Transformer Block and Architectures | Slides |
 | 8 | Machine Translation | Slides |
 | 9 | Named Entity Recognition (NER) | Slides |
-| -- | Introduction to RAG | Slides |
+| 10 | Introduction to Retrieval-Augmented Generation (RAG) | Slides |
 
 ## Repository Structure
 
@@ -68,7 +68,7 @@ deep_learning_for_natural_language_processing/
 │   │   └── slides/
 │   ├── lecture_09/          # Named Entity Recognition
 │   │   └── slides/
-│   └── introduction_to_rag/ # Retrieval-Augmented Generation
+│   └── lecture_10_introduction_to_rag/ # Retrieval-Augmented Generation
 │       └── slides/
 ├── administration/          # Course syllabus
 ├── resources/

@@ -52,3 +52,6 @@ instructor/
 backups/
 working_space/
 processed_content/
+
+# LaTeX source files (only PDFs are published)
+*.tex
