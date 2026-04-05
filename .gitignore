@@ -34,7 +34,9 @@ Thumbs.db
 *.swp
 *.swo
 
-# Private / instructor-only
+# Private / instructor-only (files starting with _ are private)
+_*
+**/_*
 private/
 *_solutions.*
 *_Solutions.*
