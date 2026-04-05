@@ -7,7 +7,7 @@
 | **University** | Alfaisal University |
 | **College** | College of Engineering |
 | **Instructor** | Prof. Anis Koubaa |
-| **Semester** | Spring 2025 |
+| **Semester** | Spring 2026 |
 | **Credits** | 3 |
 
 ## Course Description
