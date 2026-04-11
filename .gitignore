@@ -57,3 +57,4 @@ processed_content/
 
 # LaTeX source files (only PDFs are published)
 *.tex
+*.mp4
